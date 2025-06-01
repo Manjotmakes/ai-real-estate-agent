@@ -2,7 +2,7 @@ import fitz  # type: ignore
 import os
 import json
 from autogen import AssistantAgent, UserProxyAgent, GroupChat, GroupChatManager  # type: ignore
-from dotenv import load_dotenv
+from dotenv import load_dotenv # type: ignore
 
 # Load .env and GitHub token
 load_dotenv()
@@ -32,31 +32,27 @@ For each property, extract these fields with attention to detail:
 
 1. **address**: Full property address including street, city, state, and zip code
 2. **submarket**: Look for submarket information (e.g., "Gulf Freeway/Pasadena Submarket", "Downtown Houston Submarket")
-3. **true_owner**: Look for owner information in these sections:
-   - "True Owner" field
-   - Company names in contact sections (e.g., "Kaldis Interests", "John R Wood Properties")
-   - If no owner found, use "Unknown"
-4. **asking_rent**: Look for rent information:
+3. **true_owner**: Look for the company name or owning entity (e.g., "Kaldis Interests", "Midway")
+4. **owner_contact_persons**: Extract a list of full names (e.g., "Deidre Young", "Andrew Kaldis") of people listed with phone numbers in gray sections below the property image or in contact sections
+5. **asking_rent**: Look for rent information:
    - "Asking Rent" field
    - "Rent/SF/year" values
    - If "Withheld" or not found, use "Withheld"
-5. **sf_available**: Look for available square footage:
+6. **sf_available**: Look for available square footage:
    - "Available" field (e.g., "250 - 48,000 SF" means 48000)
    - "SF Available" in tables
    - "RBA" total square footage
    - Extract the maximum number, convert to integer
-6. **contact_email**: Always set to "mtmanjot@gmail.com"
+7. **contact_email**: Always set to "mtmanjot@gmail.com"
 
 IMPORTANT EXTRACTION RULES:
-- Look carefully at ALL sections of each property
-- For sf_available, extract the MAXIMUM available square footage number
-- For true_owner, prioritize company names from contact sections over "Unknown"
-- Be thorough - don't miss any properties in the document
-- Each property is typically separated by page breaks or clear section dividers
-
-Return ONLY a valid JSON array with no additional text or formatting.
+- For `owner_contact_persons`, extract **only names of people**, not companies. They are typically listed with phone numbers.
+- Do not duplicate `true_owner` in `owner_contact_persons`.
+- Use default values when data is missing.
+- Return ONLY a JSON array of property objects. No extra text or formatting.
 """
 )
+
 
 # User proxy agent
 user_proxy = UserProxyAgent(
@@ -128,37 +124,32 @@ async def extract_properties_from_pdf(pdf_path: str):
 
         # Enhanced prompt with specific instructions
         prompt = f"""
-Analyze this real estate document and extract ALL properties with complete information.
+        Analyze this real estate document and extract ALL properties with complete information.
 
-IMPORTANT: This document contains MULTIPLE properties. Look for:
-- Property numbers (1, 2, 3, etc.)
-- Different addresses
-- Page breaks (--- PAGE X ---)
-- Property section headers
+        IMPORTANT: This document contains MULTIPLE properties. Look for:
+        - Property numbers (1, 2, 3, etc.)
+        - Different addresses
+        - Page breaks (--- PAGE X ---)
+        - Property section headers
 
-Document text:
-{text}
+        Document text:
+        {text}
 
-Instructions:
-1. Identify each separate property (they may be numbered or separated by headers/pages)
-2. For each property, extract all required fields carefully
-3. Pay special attention to:
-   - Available square footage (look for "Available", "SF Available", "RBA" fields)
-   - Owner information (check "True Owner" and contact company names)
-   - Rent information (check "Asking Rent" and rent tables)
-4. Return a complete JSON array with ALL properties found (should be 8 properties total if document is complete)
+        Instructions:
+        1. Identify each separate property
+        2. For each property, extract:
 
-Required format for each property:
-{{
-    "address": "complete address",
-    "submarket": "submarket name or Unknown",
-    "true_owner": "owner/company name or Unknown", 
-    "asking_rent": "rent amount or Withheld",
-    "sf_available": number_or_null,
-    "contact_email": "mtmanjot@gmail.com"
-}}
-"""
-        
+        - address
+        - submarket
+        - true_owner (company/entity name)
+        - owner_contact_persons (list of actual person names listed with phone numbers)
+        - asking_rent
+        - sf_available (extract the **maximum** available square footage)
+        - contact_email (always "mtmanjot@gmail.com")
+
+        Return an array of valid JSON objects. Do NOT return explanations or markdown formatting.
+        """
+
         # Create and run group chat
         group_chat = GroupChat(
             agents=[user_proxy, pdf_parser_agent],
