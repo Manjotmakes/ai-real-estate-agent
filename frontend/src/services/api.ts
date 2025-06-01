@@ -31,6 +31,34 @@ export interface Property {
   email_sent?: boolean
   reply_received?: boolean
   last_updated?: string
+  images?: string[]
+  // Additional fields for PropertyDetails
+  city?: string
+  state?: string
+  zip?: string
+  description?: string
+  price?: number
+  bedrooms?: number
+  bathrooms?: number
+  square_footage?: number
+  agent_name?: string
+  agent_email?: string
+  agent_phone?: string
+  email_activity?: EmailActivity[]
+  showing_availability?: ShowingAvailability[]
+  utilities_included?: string[]
+  is_active?: boolean
+}
+
+export interface EmailActivity {
+  type: string
+  date: string
+  description?: string
+}
+
+export interface ShowingAvailability {
+  day: string
+  time: string
 }
 
 export interface PropertiesWithStatus {
@@ -134,6 +162,12 @@ class ApiService {
 
   getPropertyDetails = async (id: string): Promise<PropertyDetails> => {
     return this.request<PropertyDetails>(`/property/${id}/details/`)
+  }
+
+  // Add this method to the ApiService class
+  getProperty = async (id: string): Promise<Property> => {
+    const response = await this.request<PropertyDetails>(`/property/${id}/details/`)
+    return response.property
   }
 
   // Email endpoints

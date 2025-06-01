@@ -1,302 +1,462 @@
-"use client"
-import { useParams, Link } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
+"use client";
+
+import React from "react";
+import { useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { api, type Property } from "../services/api";
+import { formatDate } from "../utils/formatting";
+import { Link } from "react-router-dom";
 import {
   ArrowLeft,
-  Building2,
   MapPin,
-  DollarSign,
-  Square,
+  Home,
   Mail,
-  MessageSquare,
-  User,
-  AlertTriangle,
+  Calendar,
   CheckCircle,
-  TrendingUp,
-  TrendingDown,
-} from "lucide-react"
-import { api } from "../services/api"
-import LoadingSpinner from "../components/LoadingSpinner"
+  XCircle,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  ImageIcon,
+} from "lucide-react";
 
-const PropertyDetails = () => {
-  const { id } = useParams<{ id: string }>()
+const PropertyImageGallery: React.FC<{ images: string[]; address: string }> = ({
+  images,
+  address,
+}) => {
+  const [selectedImage, setSelectedImage] = React.useState<number | null>(null);
+  const [currentImageIndex, setCurrentImageIndex] = React.useState(0);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["property-details", id],
-    queryFn: () => api.getPropertyDetails(id!),
-    enabled: !!id,
-  })
+  if (!images || images.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+          <ImageIcon className="h-5 w-5 mr-2" />
+          Property Images
+        </h3>
+        <div className="flex items-center justify-center h-48 bg-gray-100 rounded-lg">
+          <div className="text-center">
+            <ImageIcon className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+            <p className="text-gray-500">
+              No images available for this property
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  if (isLoading) return <LoadingSpinner />
-  if (error) return <div className="text-center py-12 text-red-600">Error loading property details</div>
-  if (!data) return <div className="text-center py-12 text-gray-600">Property not found</div>
+  const openModal = (index: number) => {
+    setSelectedImage(index);
+    setCurrentImageIndex(index);
+  };
 
-  const { property, replies, comparisons } = data
+  const closeModal = () => {
+    setSelectedImage(null);
+  };
+
+  const nextImage = () => {
+    setCurrentImageIndex((prev) => (prev + 1) % images.length);
+  };
+
+  const prevImage = () => {
+    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+  };
+
+  return (
+    <>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+          <ImageIcon className="h-5 w-5 mr-2" />
+          Property Images ({images.length})
+        </h3>
+
+        {/* Main image */}
+        <div className="mb-4">
+          <div
+            className="relative w-full h-96 bg-gray-100 rounded-lg overflow-hidden cursor-pointer"
+            onClick={() => openModal(0)}
+          >
+            <img
+              src={`http://127.0.0.1:8000${images[0]}`}
+              alt={`${address} - Main image`}
+              className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+              onError={(e) => {
+                e.currentTarget.src = "/placeholder.svg?height=384&width=600";
+              }}
+            />
+            <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 transition-all duration-300 flex items-center justify-center">
+              <div className="bg-white bg-opacity-90 px-3 py-1 rounded-full text-sm font-medium opacity-0 hover:opacity-100 transition-opacity">
+                Click to view full size
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Thumbnail grid */}
+        {images.length > 1 && (
+          <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+            {images.map((image, index) => (
+              <div
+                key={index}
+                className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all"
+                onClick={() => openModal(index)}
+              >
+                <img
+                  src={`http://127.0.0.1:8000${image}`}
+                  alt={`${address} - Image ${index + 1}`}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.src =
+                      "/placeholder.svg?height=100&width=100";
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Modal for full-size images */}
+      {selectedImage !== null && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
+          <div className="relative max-w-4xl max-h-full">
+            {/* Close button */}
+            <button
+              onClick={closeModal}
+              className="absolute top-4 right-4 bg-white bg-opacity-20 text-white p-2 rounded-full hover:bg-opacity-30 transition-all z-10"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            {/* Navigation buttons */}
+            {images.length > 1 && (
+              <>
+                <button
+                  onClick={prevImage}
+                  className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white bg-opacity-20 text-white p-2 rounded-full hover:bg-opacity-30 transition-all z-10"
+                >
+                  <ChevronLeft className="h-6 w-6" />
+                </button>
+                <button
+                  onClick={nextImage}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white bg-opacity-20 text-white p-2 rounded-full hover:bg-opacity-30 transition-all z-10"
+                >
+                  <ChevronRight className="h-6 w-6" />
+                </button>
+              </>
+            )}
+
+            {/* Main image */}
+            <img
+              src={`http://127.0.0.1:8000${images[currentImageIndex]}`}
+              alt={`${address} - Image ${currentImageIndex + 1}`}
+              className="max-w-full max-h-full object-contain"
+              onError={(e) => {
+                e.currentTarget.src = "/placeholder.svg?height=600&width=800";
+              }}
+            />
+
+            {/* Image counter */}
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-50 text-white px-3 py-1 rounded-full text-sm">
+              {currentImageIndex + 1} of {images.length}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+const PropertyDetails: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const {
+    isLoading,
+    error,
+    data: property,
+  } = useQuery<Property>({
+    queryKey: ["property", id],
+    queryFn: () => api.getProperty(id!),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading property details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600 mb-2">Error loading property</p>
+          <p className="text-gray-500">{(error as Error).message}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!property) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Home className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600">Property not found</p>
+        </div>
+      </div>
+    );
+  }
+
+  const lastEmailDate =
+    property.email_activity && property.email_activity.length > 0
+      ? formatDate(property.email_activity[0].date)
+      : "N/A";
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center space-x-4">
-            <Link to="/dashboard" className="flex items-center text-gray-600 hover:text-gray-900">
-              <ArrowLeft className="h-5 w-5 mr-2" />
-              Back to Dashboard
-            </Link>
-            <div className="h-6 w-px bg-gray-300" />
-            <h1 className="text-2xl font-bold text-gray-900">Property Details</h1>
-          </div>
+          <Link
+            to="/dashboard"
+            className="inline-flex items-center text-blue-500 hover:text-blue-700"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Dashboard
+          </Link>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Property Overview */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">{property.address}</h2>
-              <div className="flex items-center space-x-4 text-gray-600">
-                <div className="flex items-center">
-                  <MapPin className="h-4 w-4 mr-1" />
-                  {property.submarket}
-                </div>
-                <div className="flex items-center">
-                  <Building2 className="h-4 w-4 mr-1" />
-                  {property.true_owner}
-                </div>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="flex items-center text-green-600 mb-1">
-                <DollarSign className="h-4 w-4 mr-1" />
-                <span className="font-semibold">{property.asking_rent || "Withheld"}</span>
-              </div>
-              <div className="flex items-center text-blue-600">
-                <Square className="h-4 w-4 mr-1" />
-                <span className="font-semibold">{property.sf_available?.toLocaleString() || "N/A"} SF</span>
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Property Details */}
+          <div>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+              <h1 className="text-3xl font-bold text-gray-900 mb-4">
+                {property.address}
+              </h1>
 
-          {/* Contact Persons */}
-          {property.owner_contact_persons && property.owner_contact_persons.length > 0 && (
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">Contact Persons</h3>
-              <div className="flex flex-wrap gap-2">
-                {property.owner_contact_persons.map((person: string, index: number) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
-                  >
-                    <User className="h-3 w-3 mr-1" />
-                    {person}
+              <div className="flex items-center text-gray-700 mb-4">
+                <MapPin className="h-5 w-5 mr-2 text-gray-500" />
+                <span>{property.submarket}</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 mb-1">
+                    Asking Rent
+                  </h3>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {property.asking_rent}
+                  </p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 mb-1">
+                    Available Space
+                  </h3>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {property.sf_available
+                      ? `${property.sf_available.toLocaleString()} SF`
+                      : "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 mb-1">
+                    True Owner
+                  </h3>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {property.true_owner}
+                  </p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 mb-1">
+                    Contact Email
+                  </h3>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {property.contact_email || "N/A"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Status indicators */}
+              <div className="flex flex-wrap gap-2 mb-6">
+                <span
+                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    property.emails_sent > 0
+                      ? "bg-green-100 text-green-800"
+                      : "bg-gray-100 text-gray-800"
+                  }`}
+                >
+                  {property.emails_sent > 0 ? (
+                    <>
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      {property.emails_sent} Email
+                      {property.emails_sent !== 1 ? "s" : ""} Sent
+                    </>
+                  ) : (
+                    "No Emails Sent"
+                  )}
+                </span>
+
+                <span
+                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    property.replies_received > 0
+                      ? "bg-blue-100 text-blue-800"
+                      : "bg-gray-100 text-gray-800"
+                  }`}
+                >
+                  {property.replies_received > 0 ? (
+                    <>
+                      <Mail className="h-3 w-3 mr-1" />
+                      {property.replies_received} Repl
+                      {property.replies_received !== 1 ? "ies" : "y"}
+                    </>
+                  ) : (
+                    "No Replies"
+                  )}
+                </span>
+
+                {property.needs_attention && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                    <XCircle className="h-3 w-3 mr-1" />
+                    Needs Attention
                   </span>
-                ))}
+                )}
               </div>
             </div>
-          )}
-        </div>
 
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* Email Activity */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <Mail className="h-5 w-5 mr-2" />
-              Email Activity
-            </h3>
-
-            {/* Sent Emails */}
-            <div className="mb-6">
-              <h4 className="font-medium text-gray-900 mb-3">Sent Emails</h4>
-              {property.sent_emails && property.sent_emails.length > 0 ? (
-                <div className="space-y-3">
-                  {property.sent_emails.map((email: any, index: number) => (
-                    <div key={index} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-gray-900">{email.contact_person}</span>
-                        <span className="text-sm text-gray-500">{new Date(email.timestamp).toLocaleDateString()}</span>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-2">{email.subject}</p>
-                      <div className="text-xs text-gray-500">To: {email.contact_email}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500">No emails sent yet</p>
-              )}
-            </div>
-
-            {/* Received Replies */}
-            <div>
-              <h4 className="font-medium text-gray-900 mb-3">Received Replies</h4>
-              {replies && replies.length > 0 ? (
-                <div className="space-y-3">
-                  {replies.map((reply: any, index: number) => (
-                    <div key={index} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-gray-900">{reply.contact_person}</span>
-                        <span className="text-sm text-gray-500">{new Date(reply.timestamp).toLocaleDateString()}</span>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-2">{reply.subject}</p>
-                      <div className="text-xs text-gray-500 mb-2">From: {reply.from_email}</div>
-                      {reply.parsed_data && Object.keys(reply.parsed_data).length > 0 && (
-                        <div className="mt-3 p-3 bg-gray-50 rounded">
-                          <p className="text-xs font-medium text-gray-700 mb-1">Extracted Data:</p>
-                          <div className="text-xs text-gray-600">
-                            {Object.entries(reply.parsed_data).map(([key, value]: [string, any]) => (
-                              <div key={key} className="flex justify-between">
-                                <span className="capitalize">{key.replace("_", " ")}:</span>
-                                <span>{String(value)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500">No replies received yet</p>
-              )}
-            </div>
+            {/* Property Images */}
+            <PropertyImageGallery
+              images={property.images || []}
+              address={property.address}
+            />
           </div>
 
-          {/* Comparisons */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <MessageSquare className="h-5 w-5 mr-2" />
-              AI Comparisons
-            </h3>
-
-            {comparisons && comparisons.length > 0 ? (
-              <div className="space-y-4">
-                {comparisons.map((comparison: any, index: number) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <p className="font-medium text-gray-900">{comparison.comparison_summary}</p>
-                        <p className="text-sm text-gray-500">
-                          {new Date(comparison.comparison_date).toLocaleDateString()}
-                        </p>
-                      </div>
-                      {comparison.requires_attention ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                          <AlertTriangle className="h-3 w-3 mr-1" />
-                          Attention
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Reviewed
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Rent Analysis */}
-                    {comparison.rent_analysis && (
-                      <div className="mb-3 p-3 bg-gray-50 rounded">
-                        <h5 className="font-medium text-gray-900 mb-2 flex items-center">
-                          <DollarSign className="h-4 w-4 mr-1" />
-                          Rent Analysis
-                        </h5>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <p className="text-gray-600">Original: {comparison.rent_analysis.original}</p>
-                            <p className="text-gray-600">Updated: {comparison.rent_analysis.updated}</p>
-                          </div>
-                          <div className="flex items-center">
-                            {comparison.rent_analysis.change_type === "increased" && (
-                              <TrendingUp className="h-4 w-4 text-red-500 mr-1" />
-                            )}
-                            {comparison.rent_analysis.change_type === "decreased" && (
-                              <TrendingDown className="h-4 w-4 text-green-500 mr-1" />
-                            )}
-                            <span
-                              className={`font-medium ${
-                                comparison.rent_analysis.change_type === "increased"
-                                  ? "text-red-600"
-                                  : comparison.rent_analysis.change_type === "decreased"
-                                    ? "text-green-600"
-                                    : "text-gray-600"
-                              }`}
-                            >
-                              {comparison.rent_analysis.change_type}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Availability Analysis */}
-                    {comparison.availability_analysis && (
-                      <div className="mb-3 p-3 bg-gray-50 rounded">
-                        <h5 className="font-medium text-gray-900 mb-2 flex items-center">
-                          <Square className="h-4 w-4 mr-1" />
-                          Availability Analysis
-                        </h5>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <p className="text-gray-600">
-                              Original SF: {comparison.availability_analysis.original_sf?.toLocaleString() || "N/A"}
-                            </p>
-                            <p className="text-gray-600">
-                              Updated SF: {comparison.availability_analysis.updated_sf?.toLocaleString() || "N/A"}
-                            </p>
-                          </div>
-                          <div className="flex items-center">
-                            {comparison.availability_analysis.change_type === "increased" && (
-                              <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
-                            )}
-                            {comparison.availability_analysis.change_type === "decreased" && (
-                              <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
-                            )}
-                            <span
-                              className={`font-medium ${
-                                comparison.availability_analysis.change_type === "increased"
-                                  ? "text-green-600"
-                                  : comparison.availability_analysis.change_type === "decreased"
-                                    ? "text-red-600"
-                                    : "text-gray-600"
-                              }`}
-                            >
-                              {comparison.availability_analysis.change_type}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Market Signal */}
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          comparison.market_signal === "positive"
-                            ? "bg-green-100 text-green-800"
-                            : comparison.market_signal === "negative"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-gray-100 text-gray-800"
-                        }`}
+          {/* Additional Information */}
+          <div>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <Mail className="h-5 w-5 mr-2" />
+                Email Activity
+              </h3>
+              {property.email_activity && property.email_activity.length > 0 ? (
+                <>
+                  <p className="text-gray-700 mb-4">
+                    Last email sent: {lastEmailDate}
+                  </p>
+                  <div className="space-y-2">
+                    {property.email_activity.map((activity, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                       >
-                        Market Signal: {comparison.market_signal}
-                      </span>
-                    </div>
-
-                    {comparison.notes && (
-                      <div className="mt-3 p-2 bg-blue-50 rounded text-sm text-blue-800">
-                        <strong>Notes:</strong> {comparison.notes}
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {activity.type}
+                          </p>
+                          {activity.description && (
+                            <p className="text-sm text-gray-600">
+                              {activity.description}
+                            </p>
+                          )}
+                        </div>
+                        <span className="text-sm text-gray-500">
+                          {formatDate(activity.date)}
+                        </span>
                       </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-gray-700">
+                  No email activity recorded for this property.
+                </p>
+              )}
+            </div>
+
+            {property.showing_availability &&
+              property.showing_availability.length > 0 && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <Calendar className="h-5 w-5 mr-2" />
+                    Showing Availability
+                  </h3>
+                  <div className="space-y-2">
+                    {property.showing_availability.map(
+                      (availability, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                        >
+                          <span className="font-medium text-gray-900">
+                            {availability.day}
+                          </span>
+                          <span className="text-gray-600">
+                            {availability.time}
+                          </span>
+                        </div>
+                      )
                     )}
                   </div>
-                ))}
+                </div>
+              )}
+
+            {property.utilities_included &&
+              property.utilities_included.length > 0 && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <CheckCircle className="h-5 w-5 mr-2" />
+                    Utilities Included
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {property.utilities_included.map((utility, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center p-2 bg-green-50 rounded-lg"
+                      >
+                        <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
+                        <span className="text-gray-900">{utility}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            {/* Status indicator */}
+            <div
+              className={`rounded-lg p-4 ${
+                property.is_active !== false
+                  ? "bg-green-100 text-green-700 border border-green-500"
+                  : "bg-red-100 text-red-700 border border-red-500"
+              }`}
+            >
+              <div className="flex items-center">
+                {property.is_active !== false ? (
+                  <>
+                    <CheckCircle className="h-5 w-5 mr-2" />
+                    <span>
+                      This property is currently active and available.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="h-5 w-5 mr-2" />
+                    <span>This property is not active.</span>
+                  </>
+                )}
               </div>
-            ) : (
-              <p className="text-gray-500">No comparisons available yet</p>
-            )}
+            </div>
           </div>
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default PropertyDetails
+export default PropertyDetails;

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 import os
 from bson import ObjectId
@@ -26,6 +27,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Create images directory and mount static files
+IMAGES_DIR = "../data/images"
+os.makedirs(IMAGES_DIR, exist_ok=True)
+
+# Mount static files for serving images
+app.mount("/images", StaticFiles(directory=IMAGES_DIR), name="images")
+
 @app.get("/")
 async def root():
     """Root endpoint"""
@@ -40,7 +48,7 @@ async def health_check():
 
 @app.post("/upload-pdf/")
 async def upload_pdf(file: UploadFile = File(...)):
-    """Upload and extract data from PDF"""
+    """Upload and extract data from PDF including images"""
     print(f"🚀 Starting PDF upload: {file.filename}")
     import time
     start_time = time.time()
@@ -63,13 +71,17 @@ async def upload_pdf(file: UploadFile = File(...)):
             f.write(content)
         print(f"💾 Saved {len(content)} bytes")
         
-        # Extract properties
-        print("🔍 Starting property extraction...")
+        # Extract properties (including images)
+        print("🔍 Starting property extraction with images...")
         extraction_start = time.time()
         extracted_data = await extract_properties_from_pdf(file_path)
         extraction_time = time.time() - extraction_start
         print(f"🔍 Property extraction completed in {extraction_time:.2f} seconds")
         print(f"📊 Extracted {len(extracted_data)} properties")
+        
+        # Count total images extracted
+        total_images = sum(len(prop.get("images", [])) for prop in extracted_data)
+        print(f"🖼️ Extracted {total_images} total images")
         
         # Save to MongoDB if we have data
         if extracted_data:
@@ -99,6 +111,7 @@ async def upload_pdf(file: UploadFile = File(...)):
             "processing_time": f"{total_time:.2f}s",
             "extraction_time": f"{extraction_time:.2f}s",
             "properties_count": len(extracted_data),
+            "images_extracted": total_images,
             "status": "success"
         })
         
@@ -198,6 +211,7 @@ async def get_properties_with_status():
                     "asking_rent": 1,
                     "sf_available": 1,
                     "owner_contact_persons": 1,
+                    "images": 1,  # Include images in the response
                     "emails_sent": {"$size": {"$ifNull": ["$sent_emails", []]}},
                     "replies_received": {"$size": "$replies"},
                     "comparisons_available": {"$size": "$comparisons"},

@@ -1,8 +1,12 @@
 import fitz  # type: ignore
 import os
 import json
+import hashlib
+from datetime import datetime
 from autogen import AssistantAgent, UserProxyAgent, GroupChat, GroupChatManager  # type: ignore
 from dotenv import load_dotenv # type: ignore
+from PIL import Image
+import io
 
 # Load .env and GitHub token
 load_dotenv()
@@ -53,7 +57,6 @@ IMPORTANT EXTRACTION RULES:
 """
 )
 
-
 # User proxy agent
 user_proxy = UserProxyAgent(
     name="user_proxy",
@@ -63,7 +66,6 @@ user_proxy = UserProxyAgent(
     human_input_mode="NEVER",
     max_consecutive_auto_reply=1
 )
-
 
 def extract_text_from_pdf(pdf_path: str, max_pages=None) -> str:
     """Extract text from ALL pages of PDF (not just first 5)"""
@@ -86,30 +88,195 @@ def extract_text_from_pdf(pdf_path: str, max_pages=None) -> str:
     print(f"📄 Extracted {len(text)} characters from PDF")
     return text
 
+def is_property_image(image_bytes, width, height, page_text=""):
+    """
+    Determine if an image is likely a property photo vs text/logo/symbol
+    
+    Criteria for property images:
+    1. Minimum size (width > 200px, height > 150px)
+    2. Reasonable aspect ratio (not too narrow/wide)
+    3. Sufficient file size (> 10KB)
+    4. Not too small in file size (logos are usually small)
+    5. Check if it's a color image (property photos are usually colorful)
+    """
+    
+    # Size filters
+    if width < 200 or height < 150:
+        print(f"❌ Image too small: {width}x{height}")
+        return False
+    
+    # File size filter
+    if len(image_bytes) < 10000:  # Less than 10KB
+        print(f"❌ Image file too small: {len(image_bytes)} bytes")
+        return False
+    
+    # Aspect ratio filter (avoid very wide or very tall images)
+    aspect_ratio = width / height
+    if aspect_ratio > 4 or aspect_ratio < 0.25:
+        print(f"❌ Unusual aspect ratio: {aspect_ratio:.2f}")
+        return False
+    
+    try:
+        # Load image with PIL to analyze
+        img = Image.open(io.BytesIO(image_bytes))
+        
+        # Convert to RGB if needed
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        # Check color variance (logos/text often have limited colors)
+        # Sample pixels and check color diversity
+        img_small = img.resize((50, 50))  # Resize for faster processing
+        pixels = list(img_small.getdata())
+        
+        # Calculate color variance
+        unique_colors = len(set(pixels))
+        color_variance = unique_colors / len(pixels)
+        
+        if color_variance < 0.1:  # Very limited color palette
+            print(f"❌ Limited color variance: {color_variance:.3f}")
+            return False
+        
+        # Check if image is mostly white/transparent (common for logos)
+        white_pixels = sum(1 for r, g, b in pixels if r > 240 and g > 240 and b > 240)
+        white_ratio = white_pixels / len(pixels)
+        
+        if white_ratio > 0.7:  # More than 70% white
+            print(f"❌ Too much white space: {white_ratio:.3f}")
+            return False
+        
+        print(f"✅ Property image detected: {width}x{height}, {len(image_bytes)} bytes, colors: {color_variance:.3f}")
+        return True
+        
+    except Exception as e:
+        print(f"⚠️ Error analyzing image: {e}")
+        return False
 
-def extract_property_images(pdf_path: str):
+def extract_property_images(pdf_path: str, output_dir: str = "../data/images"):
+    """Extract only property images from PDF, filtering out logos/text/symbols"""
+    print(f"🖼️ Starting property image extraction from: {pdf_path}")
+    
+    # Create images directory
+    os.makedirs(output_dir, exist_ok=True)
+    
     doc = fitz.open(pdf_path)
     image_paths = []
-
+    property_images = {}  # Group images by property/page
+    
     for page_num, page in enumerate(doc, start=1):
+        print(f"📄 Processing page {page_num} for property images...")
+        
+        # Get page text for context
+        page_text = page.get_text()
+        
+        # Get images from this page
         images = page.get_images(full=True)
+        page_images = []
+        
+        print(f"🔍 Found {len(images)} total images on page {page_num}")
+        
         for img_index, img in enumerate(images):
-            xref = img[0]
-            base_image = doc.extract_image(xref)
-            image_bytes = base_image["image"]
-            image_ext = base_image["ext"]
-            img_path = f"../data/property_page_{page_num}_img_{img_index}.{image_ext}"
-            with open(img_path, "wb") as img_file:
-                img_file.write(image_bytes)
-            image_paths.append(img_path)
+            try:
+                xref = img[0]
+                base_image = doc.extract_image(xref)
+                image_bytes = base_image["image"]
+                image_ext = base_image["ext"]
+                width = base_image["width"]
+                height = base_image["height"]
+                
+                print(f"📸 Analyzing image {img_index + 1}: {width}x{height}, {len(image_bytes)} bytes")
+                
+                # Filter out non-property images
+                if not is_property_image(image_bytes, width, height, page_text):
+                    print(f"⏭️ Skipping non-property image {img_index + 1}")
+                    continue
+                
+                # Create a hash of the image to avoid duplicates
+                image_hash = hashlib.md5(image_bytes).hexdigest()[:8]
+                
+                # Create meaningful filename
+                filename = f"property_page_{page_num}_photo_{len(page_images) + 1}_{image_hash}.{image_ext}"
+                img_path = os.path.join(output_dir, filename)
+                
+                # Save image
+                with open(img_path, "wb") as img_file:
+                    img_file.write(image_bytes)
+                
+                # Store relative path for database
+                relative_path = f"/images/{filename}"
+                page_images.append(relative_path)
+                image_paths.append(relative_path)
+                
+                print(f"💾 Saved property image: {filename} ({len(image_bytes)} bytes)")
+                
+            except Exception as e:
+                print(f"⚠️ Failed to process image {img_index} from page {page_num}: {e}")
+                continue
+        
+        # Group images by page (which typically corresponds to properties)
+        if page_images:
+            property_images[page_num] = page_images
+            print(f"✅ Page {page_num}: Found {len(page_images)} property images")
+        else:
+            print(f"📷 Page {page_num}: No property images found")
+    
+    doc.close()
+    print(f"✅ Extracted {len(image_paths)} total property images")
+    return property_images, image_paths
 
-    return image_paths
-
+def assign_images_to_properties(properties: list, property_images: dict) -> list:
+    """Assign extracted property images to properties based on page numbers and content"""
+    print(f"🔗 Assigning property images to {len(properties)} properties...")
+    
+    # Enhanced assignment logic
+    for i, prop in enumerate(properties):
+        prop_images = []
+        
+        # Strategy 1: Try to assign images from relevant pages
+        # Each property typically spans 1-2 pages
+        potential_pages = []
+        
+        if i == 0:  # First property
+            potential_pages = [1, 2]
+        elif i == 1:  # Second property  
+            potential_pages = [3, 4]
+        elif i == 2:  # Third property
+            potential_pages = [5, 6]
+        else:
+            # For remaining properties, estimate based on index
+            start_page = (i * 2) + 1
+            potential_pages = [start_page, start_page + 1]
+        
+        # Collect images from potential pages
+        for page_num in potential_pages:
+            if page_num in property_images:
+                prop_images.extend(property_images[page_num])
+        
+        # Strategy 2: If no images found, try adjacent pages
+        if not prop_images:
+            for page_num in range(max(1, potential_pages[0] - 1), min(len(property_images) + 1, potential_pages[-1] + 2)):
+                if page_num in property_images and len(property_images[page_num]) > 0:
+                    # Only take first image from adjacent pages to avoid duplicates
+                    prop_images.append(property_images[page_num][0])
+                    break
+        
+        # Assign images to property
+        prop["images"] = prop_images
+        
+        if prop_images:
+            print(f"🏢 Property '{prop.get('address', 'Unknown')}' assigned {len(prop_images)} property images")
+        else:
+            print(f"📷 No property images found for '{prop.get('address', 'Unknown')}'")
+    
+    return properties
 
 async def extract_properties_from_pdf(pdf_path: str):
     print(f"🚀 Starting property extraction from: {pdf_path}")
     
     try:
+        # Extract property images first (with filtering)
+        property_images, all_image_paths = extract_property_images(pdf_path)
+        
         # Read ALL pages instead of just 5
         text = extract_text_from_pdf(pdf_path, max_pages=None)
         
@@ -120,113 +287,122 @@ async def extract_properties_from_pdf(pdf_path: str):
         # Check if text is too long for API and split if needed
         if len(text) > 100000:  # If text is very long (>100k chars)
             print("📄 PDF text is very long, processing in chunks...")
-            return await process_pdf_in_chunks(text)
+            properties = await process_pdf_in_chunks(text)
+        else:
+            properties = await extract_properties_with_agent(text)
 
-        # Enhanced prompt with specific instructions
-        prompt = f"""
-        Analyze this real estate document and extract ALL properties with complete information.
-
-        IMPORTANT: This document contains MULTIPLE properties. Look for:
-        - Property numbers (1, 2, 3, etc.)
-        - Different addresses
-        - Page breaks (--- PAGE X ---)
-        - Property section headers
-
-        Document text:
-        {text}
-
-        Instructions:
-        1. Identify each separate property
-        2. For each property, extract:
-
-        - address
-        - submarket
-        - true_owner (company/entity name)
-        - owner_contact_persons (list of actual person names listed with phone numbers)
-        - asking_rent
-        - sf_available (extract the **maximum** available square footage)
-        - contact_email (always "mtmanjot@gmail.com")
-
-        Return an array of valid JSON objects. Do NOT return explanations or markdown formatting.
-        """
-
-        # Create and run group chat
-        group_chat = GroupChat(
-            agents=[user_proxy, pdf_parser_agent],
-            messages=[],
-            max_round=5,  # Increased rounds for better processing
-            speaker_selection_method="round_robin"
-        )
-        chat_manager = GroupChatManager(groupchat=group_chat, llm_config=llm_config)
+        # Assign property images to properties
+        if properties and property_images:
+            properties = assign_images_to_properties(properties, property_images)
         
-        try:
-            await user_proxy.a_initiate_chat(
-                recipient=chat_manager,
-                message=prompt,
-                max_turns=5
-            )
-        except Exception as e:
-            print(f"❌ Async conversation failed: {e}")
-            # Fallback to sync
-            user_proxy.initiate_chat(
-                recipient=chat_manager,
-                message=prompt,
-                max_turns=5
-            )
-
-        # Extract response from agent
-        content = None
-        for msg in reversed(group_chat.messages):
-            if msg.get("name") == "pdf_parser_agent":
-                content = msg.get("content")
-                break
-
-        if not content:
-            print("❌ No response from agent")
-            return create_fallback_extraction(text)
-
-        # Parse JSON response
-        try:
-            content_clean = content.strip()
-            
-            # Remove markdown code blocks
-            if content_clean.startswith('```json'):
-                content_clean = content_clean[7:-3].strip()
-            elif content_clean.startswith('```'):
-                content_clean = content_clean[3:-3].strip()
-            
-            # Parse JSON
-            if content_clean.startswith('[') or content_clean.startswith('{'):
-                parsed = json.loads(content_clean)
-            else:
-                import re
-                json_match = re.search(r'(\[.*\]|\{.*\})', content_clean, re.DOTALL)
-                if json_match:
-                    parsed = json.loads(json_match.group(1))
-                else:
-                    return create_fallback_extraction(text)
-            
-            result = parsed if isinstance(parsed, list) else [parsed]
-            print(f"✅ Successfully extracted {len(result)} properties")
-            
-            # Validate we got all properties
-            if len(result) < 8:
-                print(f"⚠️ Expected 8 properties but got {len(result)}, trying fallback extraction...")
-                fallback_result = create_fallback_extraction(text)
-                if len(fallback_result) > len(result):
-                    print(f"✅ Fallback found {len(fallback_result)} properties")
-                    return fallback_result
-            
-            return result
-            
-        except Exception as e:
-            print(f"❌ JSON parsing failed: {e}")
-            return create_fallback_extraction(text)
+        return properties
             
     except Exception as e:
         print(f"❌ Error in extraction: {e}")
         return []
 
+async def extract_properties_with_agent(text: str):
+    """Extract properties using the AI agent"""
+    # Enhanced prompt with specific instructions
+    prompt = f"""
+    Analyze this real estate document and extract ALL properties with complete information.
+
+    IMPORTANT: This document contains MULTIPLE properties. Look for:
+    - Property numbers (1, 2, 3, etc.)
+    - Different addresses
+    - Page breaks (--- PAGE X ---)
+    - Property section headers
+
+    Document text:
+    {text}
+
+    Instructions:
+    1. Identify each separate property
+    2. For each property, extract:
+
+    - address
+    - submarket
+    - true_owner (company/entity name)
+    - owner_contact_persons (list of actual person names listed with phone numbers)
+    - asking_rent
+    - sf_available (extract the **maximum** available square footage)
+    - contact_email (always "mtmanjot@gmail.com")
+
+    Return an array of valid JSON objects. Do NOT return explanations or markdown formatting.
+    """
+
+    # Create and run group chat
+    group_chat = GroupChat(
+        agents=[user_proxy, pdf_parser_agent],
+        messages=[],
+        max_round=5,  # Increased rounds for better processing
+        speaker_selection_method="round_robin"
+    )
+    chat_manager = GroupChatManager(groupchat=group_chat, llm_config=llm_config)
+    
+    try:
+        await user_proxy.a_initiate_chat(
+            recipient=chat_manager,
+            message=prompt,
+            max_turns=5
+        )
+    except Exception as e:
+        print(f"❌ Async conversation failed: {e}")
+        # Fallback to sync
+        user_proxy.initiate_chat(
+            recipient=chat_manager,
+            message=prompt,
+            max_turns=5
+        )
+
+    # Extract response from agent
+    content = None
+    for msg in reversed(group_chat.messages):
+        if msg.get("name") == "pdf_parser_agent":
+            content = msg.get("content")
+            break
+
+    if not content:
+        print("❌ No response from agent")
+        return create_fallback_extraction(text)
+
+    # Parse JSON response
+    try:
+        content_clean = content.strip()
+        
+        # Remove markdown code blocks
+        if content_clean.startswith('```json'):
+            content_clean = content_clean[7:-3].strip()
+        elif content_clean.startswith('```'):
+            content_clean = content_clean[3:-3].strip()
+        
+        # Parse JSON
+        if content_clean.startswith('[') or content_clean.startswith('{'):
+            parsed = json.loads(content_clean)
+        else:
+            import re
+            json_match = re.search(r'(\[.*\]|\{.*\})', content_clean, re.DOTALL)
+            if json_match:
+                parsed = json.loads(json_match.group(1))
+            else:
+                return create_fallback_extraction(text)
+        
+        result = parsed if isinstance(parsed, list) else [parsed]
+        print(f"✅ Successfully extracted {len(result)} properties")
+        
+        # Validate we got all properties
+        if len(result) < 8:
+            print(f"⚠️ Expected 8 properties but got {len(result)}, trying fallback extraction...")
+            fallback_result = create_fallback_extraction(text)
+            if len(fallback_result) > len(result):
+                print(f"✅ Fallback found {len(fallback_result)} properties")
+                return fallback_result
+        
+        return result
+        
+    except Exception as e:
+        print(f"❌ JSON parsing failed: {e}")
+        return create_fallback_extraction(text)
 
 async def process_pdf_in_chunks(text: str):
     """Process large PDFs in chunks to avoid API limits"""
@@ -253,7 +429,6 @@ async def process_pdf_in_chunks(text: str):
     
     print(f"✅ Chunk processing found {len(all_properties)} total properties")
     return all_properties
-
 
 def create_fallback_extraction(text: str):
     """Enhanced fallback extraction with better pattern matching"""
@@ -351,7 +526,8 @@ def create_fallback_extraction(text: str):
             "true_owner": owner,
             "asking_rent": asking_rent,
             "sf_available": sf_available,
-            "contact_email": "mtmanjot@gmail.com"
+            "contact_email": "mtmanjot@gmail.com",
+            "images": []  # Initialize empty images array
         }
         properties.append(prop)
     
