@@ -5,7 +5,7 @@ import hashlib
 from datetime import datetime
 from autogen import AssistantAgent, UserProxyAgent, GroupChat, GroupChatManager  # type: ignore
 from dotenv import load_dotenv # type: ignore
-from PIL import Image
+from PIL import Image #type: ignore
 import io
 
 # Load .env and GitHub token
@@ -47,7 +47,7 @@ For each property, extract these fields with attention to detail:
    - "SF Available" in tables
    - "RBA" total square footage
    - Extract the maximum number, convert to integer
-7. **contact_email**: Always set to "mtmanjot@gmail.com"
+7. **contact_email**: Always set to "example@gmail.com"
 
 IMPORTANT EXTRACTION RULES:
 - For `owner_contact_persons`, extract **only names of people**, not companies. They are typically listed with phone numbers.
@@ -160,8 +160,7 @@ def extract_property_images(pdf_path: str, output_dir: str = "../data/images"):
     os.makedirs(output_dir, exist_ok=True)
     
     doc = fitz.open(pdf_path)
-    image_paths = []
-    property_images = {}  # Group images by property/page
+    all_images = []  # Store all valid property images in order
     
     for page_num, page in enumerate(doc, start=1):
         print(f"📄 Processing page {page_num} for property images...")
@@ -171,7 +170,6 @@ def extract_property_images(pdf_path: str, output_dir: str = "../data/images"):
         
         # Get images from this page
         images = page.get_images(full=True)
-        page_images = []
         
         print(f"🔍 Found {len(images)} total images on page {page_num}")
         
@@ -194,8 +192,8 @@ def extract_property_images(pdf_path: str, output_dir: str = "../data/images"):
                 # Create a hash of the image to avoid duplicates
                 image_hash = hashlib.md5(image_bytes).hexdigest()[:8]
                 
-                # Create meaningful filename
-                filename = f"property_page_{page_num}_photo_{len(page_images) + 1}_{image_hash}.{image_ext}"
+                # Create meaningful filename with sequential numbering
+                filename = f"property_{len(all_images) + 1:02d}_{image_hash}.{image_ext}"
                 img_path = os.path.join(output_dir, filename)
                 
                 # Save image
@@ -204,69 +202,55 @@ def extract_property_images(pdf_path: str, output_dir: str = "../data/images"):
                 
                 # Store relative path for database
                 relative_path = f"/images/{filename}"
-                page_images.append(relative_path)
-                image_paths.append(relative_path)
+                all_images.append({
+                    'path': relative_path,
+                    'page': page_num,
+                    'index': len(all_images)
+                })
                 
-                print(f"💾 Saved property image: {filename} ({len(image_bytes)} bytes)")
+                print(f"💾 Saved property image {len(all_images)}: {filename} ({len(image_bytes)} bytes)")
                 
             except Exception as e:
                 print(f"⚠️ Failed to process image {img_index} from page {page_num}: {e}")
                 continue
-        
-        # Group images by page (which typically corresponds to properties)
-        if page_images:
-            property_images[page_num] = page_images
-            print(f"✅ Page {page_num}: Found {len(page_images)} property images")
-        else:
-            print(f"📷 Page {page_num}: No property images found")
     
     doc.close()
-    print(f"✅ Extracted {len(image_paths)} total property images")
-    return property_images, image_paths
+    print(f"✅ Extracted {len(all_images)} total property images in sequential order")
+    return all_images
 
-def assign_images_to_properties(properties: list, property_images: dict) -> list:
-    """Assign extracted property images to properties based on page numbers and content"""
-    print(f"🔗 Assigning property images to {len(properties)} properties...")
+def assign_images_to_properties(properties: list, extracted_images: list) -> list:
+    """
+    Assign extracted property images to properties in 1:1 mapping
+    Each property gets exactly one image in order: 1st property -> 1st image, etc.
+    """
+    print(f"🔗 Assigning {len(extracted_images)} images to {len(properties)} properties...")
     
-    # Enhanced assignment logic
-    for i, prop in enumerate(properties):
-        prop_images = []
-        
-        # Strategy 1: Try to assign images from relevant pages
-        # Each property typically spans 1-2 pages
-        potential_pages = []
-        
-        if i == 0:  # First property
-            potential_pages = [1, 2]
-        elif i == 1:  # Second property  
-            potential_pages = [3, 4]
-        elif i == 2:  # Third property
-            potential_pages = [5, 6]
+    # Initialize all properties with empty images
+    for prop in properties:
+        prop["images"] = []
+    
+    # Simple 1:1 sequential assignment
+    for i in range(len(properties)):
+        if i < len(extracted_images):
+            # Assign the i-th image to the i-th property
+            properties[i]["images"] = [extracted_images[i]['path']]
+            
+            address = properties[i].get('address', 'Unknown')[:50]  # Truncate for display
+            print(f"🏢 Property {i+1} '{address}...' assigned image: {extracted_images[i]['path']}")
         else:
-            # For remaining properties, estimate based on index
-            start_page = (i * 2) + 1
-            potential_pages = [start_page, start_page + 1]
-        
-        # Collect images from potential pages
-        for page_num in potential_pages:
-            if page_num in property_images:
-                prop_images.extend(property_images[page_num])
-        
-        # Strategy 2: If no images found, try adjacent pages
-        if not prop_images:
-            for page_num in range(max(1, potential_pages[0] - 1), min(len(property_images) + 1, potential_pages[-1] + 2)):
-                if page_num in property_images and len(property_images[page_num]) > 0:
-                    # Only take first image from adjacent pages to avoid duplicates
-                    prop_images.append(property_images[page_num][0])
-                    break
-        
-        # Assign images to property
-        prop["images"] = prop_images
-        
-        if prop_images:
-            print(f"🏢 Property '{prop.get('address', 'Unknown')}' assigned {len(prop_images)} property images")
-        else:
-            print(f"📷 No property images found for '{prop.get('address', 'Unknown')}'")
+            # No more images available
+            address = properties[i].get('address', 'Unknown')[:50]
+            print(f"📷 Property {i+1} '{address}...' has no image available")
+    
+    # Handle case where there are more images than properties
+    if len(extracted_images) > len(properties):
+        print(f"⚠️ Warning: {len(extracted_images) - len(properties)} extra images not assigned")
+        for j in range(len(properties), len(extracted_images)):
+            print(f"📸 Unassigned image: {extracted_images[j]['path']}")
+    
+    # Summary
+    assigned_count = sum(1 for prop in properties if prop.get("images"))
+    print(f"✅ Successfully assigned images to {assigned_count}/{len(properties)} properties")
     
     return properties
 
@@ -274,8 +258,8 @@ async def extract_properties_from_pdf(pdf_path: str):
     print(f"🚀 Starting property extraction from: {pdf_path}")
     
     try:
-        # Extract property images first (with filtering)
-        property_images, all_image_paths = extract_property_images(pdf_path)
+        # Extract property images first (with filtering) - returns ordered list
+        extracted_images = extract_property_images(pdf_path)
         
         # Read ALL pages instead of just 5
         text = extract_text_from_pdf(pdf_path, max_pages=None)
@@ -291,9 +275,9 @@ async def extract_properties_from_pdf(pdf_path: str):
         else:
             properties = await extract_properties_with_agent(text)
 
-        # Assign property images to properties
-        if properties and property_images:
-            properties = assign_images_to_properties(properties, property_images)
+        # Assign property images to properties in 1:1 order
+        if properties and extracted_images:
+            properties = assign_images_to_properties(properties, extracted_images)
         
         return properties
             
@@ -326,7 +310,7 @@ async def extract_properties_with_agent(text: str):
     - owner_contact_persons (list of actual person names listed with phone numbers)
     - asking_rent
     - sf_available (extract the **maximum** available square footage)
-    - contact_email (always "mtmanjot@gmail.com")
+    - contact_email (always "example@gmail.com")
 
     Return an array of valid JSON objects. Do NOT return explanations or markdown formatting.
     """
@@ -526,7 +510,7 @@ def create_fallback_extraction(text: str):
             "true_owner": owner,
             "asking_rent": asking_rent,
             "sf_available": sf_available,
-            "contact_email": "mtmanjot@gmail.com",
+            "contact_email": "example@gmail.com",
             "images": []  # Initialize empty images array
         }
         properties.append(prop)

@@ -1,42 +1,43 @@
-import type React from "react";
-import type { LucideIcon } from "lucide-react";
+import type React from "react"
+import type { LucideIcon } from "lucide-react"
 
 interface StatsCardProps {
-  title: string;
-  value: number;
-  icon: LucideIcon;
-  color: "blue" | "green" | "purple" | "orange";
-  subtitle?: string;
+  title: string
+  value: number
+  icon: LucideIcon
+  color: "blue" | "green" | "purple" | "orange"
+  subtitle?: string
 }
 
-const StatsCard: React.FC<StatsCardProps> = ({
-  title,
-  value,
-  icon: Icon,
-  color,
-  subtitle,
-}) => {
+const StatsCard: React.FC<StatsCardProps> = ({ title, value, icon: Icon, color, subtitle }) => {
   const colorClasses = {
-    blue: "bg-blue-100 text-blue-600",
-    green: "bg-green-100 text-green-600",
-    purple: "bg-purple-100 text-purple-600",
-    orange: "bg-orange-100 text-orange-600",
-  };
+    blue: "from-blue-500/20 to-cyan-600/20 border-blue-400/30",
+    green: "from-green-500/20 to-emerald-600/20 border-green-400/30",
+    purple: "from-purple-500/20 to-violet-600/20 border-purple-400/30",
+    orange: "from-orange-500/20 to-red-600/20 border-orange-400/30",
+  }
+
+  const iconColors = {
+    blue: "text-blue-300",
+    green: "text-green-300",
+    purple: "text-purple-300",
+    orange: "text-orange-300",
+  }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div className={`glass rounded-2xl p-6 card-hover bg-gradient-to-br ${colorClasses[color]} border`}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className="text-3xl font-bold text-gray-900">{value}</p>
-          {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
+          <p className="text-white/70 text-sm font-medium mb-1">{title}</p>
+          <p className="text-3xl font-bold text-white mb-1">{value.toLocaleString()}</p>
+          {subtitle && <p className="text-white/60 text-xs">{subtitle}</p>}
         </div>
-        <div className={`p-3 rounded-lg ${colorClasses[color]}`}>
-          <Icon className="h-6 w-6" />
+        <div className="p-4 glass rounded-2xl">
+          <Icon className={`h-8 w-8 ${iconColors[color]}`} />
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default StatsCard;
+export default StatsCard
