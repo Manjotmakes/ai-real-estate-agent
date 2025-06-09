@@ -1,10 +1,10 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-import uvicorn
+from fastapi import FastAPI, HTTPException, UploadFile, File    #type: ignore
+from fastapi.responses import JSONResponse  #type: ignore
+from fastapi.middleware.cors import CORSMiddleware  #type: ignore
+from fastapi.staticfiles import StaticFiles     #type: ignore
+import uvicorn  #type: ignore
 import os
-from bson import ObjectId
+from bson import ObjectId  #type: ignore
 from models import properties_collection, email_replies_collection, comparisons_collection
 from ai_pdf_parser import extract_properties_from_pdf
 from email_sender_agent import run_email_agent_for_all_properties
@@ -341,7 +341,7 @@ async def get_property_details(property_id: str):
         except:
             raise HTTPException(status_code=400, detail="Invalid property ID format")
         
-        # Get property data
+        # Get basic property data
         property_data = properties_collection.find_one({"_id": object_id})
         if not property_data:
             raise HTTPException(status_code=404, detail="Property not found")
@@ -352,10 +352,80 @@ async def get_property_details(property_id: str):
         # Get comparisons for this property
         comparisons = list(comparisons_collection.find({"property_id": property_id}))
         
-        # Convert ObjectIds to strings for JSON serialization
+        # Process data BEFORE converting ObjectIds to avoid data structure issues
+        # Calculate email statistics
+        sent_emails = property_data.get("sent_emails", [])
+        emails_sent_count = len(sent_emails)
+        replies_received_count = len(replies)
+        comparisons_available_count = len(comparisons)
+        has_replies = len(replies) > 0
+        needs_attention = any(comp.get("requires_attention", False) for comp in comparisons)
+        
+        # Get latest reply date
+        latest_reply_date = None
+        if replies:
+            try:
+                latest_reply = max(replies, key=lambda r: r.get("timestamp", ""))
+                latest_reply_date = latest_reply.get("timestamp")
+            except:
+                pass
+        
+        # Create email activity timeline
+        email_activity = []
+        
+        # Add sent emails to activity
+        for email in sent_emails:
+            if isinstance(email, dict):
+                activity = {
+                    "type": "Email Sent",
+                    "date": email.get("timestamp", email.get("date", "")),
+                    "description": f"Email sent to {email.get('recipient', 'contact')}"
+                }
+                email_activity.append(activity)
+        
+        # Add replies to activity
+        for reply in replies:
+            if isinstance(reply, dict):
+                activity = {
+                    "type": "Reply Received", 
+                    "date": reply.get("timestamp", reply.get("received_date", "")),
+                    "description": f"Reply from {reply.get('sender_email', 'contact')}"
+                }
+                email_activity.append(activity)
+        
+        # Sort activity by date (most recent first)
+        email_activity.sort(key=lambda x: x.get("date", ""), reverse=True)
+        
+        # Extract contact email from owner_contact_persons
+        contact_email = ""
+        owner_contacts = property_data.get("owner_contact_persons", [])
+        if owner_contacts and len(owner_contacts) > 0:
+            first_contact = owner_contacts[0]
+            if isinstance(first_contact, dict):
+                contact_email = first_contact.get("email", "")
+        
+        # Now convert ObjectIds to strings
         property_data = convert_objectid_to_string(property_data)
         replies = convert_objectid_to_string(replies)
         comparisons = convert_objectid_to_string(comparisons)
+        
+        # Add computed fields after conversion
+        property_data["emails_sent"] = emails_sent_count
+        property_data["replies_received"] = replies_received_count
+        property_data["comparisons_available"] = comparisons_available_count
+        property_data["has_replies"] = has_replies
+        property_data["needs_attention"] = needs_attention
+        property_data["latest_reply_date"] = latest_reply_date
+        property_data["email_activity"] = email_activity[:10]  # Limit to 10 most recent
+        property_data["contact_email"] = contact_email
+        
+        # Set defaults for optional fields
+        property_data["is_active"] = property_data.get("is_active", True)
+        property_data["showing_availability"] = property_data.get("showing_availability", [])
+        property_data["utilities_included"] = property_data.get("utilities_included", [])
+        
+        # Ensure images field exists
+        property_data["images"] = property_data.get("images", [])
         
         return JSONResponse(content={
             "property": property_data,
@@ -367,6 +437,8 @@ async def get_property_details(property_id: str):
         raise
     except Exception as e:
         print(f"❌ Error getting property details: {e}")
+        import traceback
+        traceback.print_exc()
         return JSONResponse(
             status_code=500,
             content={"error": str(e)}
@@ -423,6 +495,46 @@ async def new_pdf_workflow():
             status_code=500,
             content={"error": str(e), "message": "New PDF workflow failed"}
         )
+
+@app.get("/property/{property_id}/conversation/")
+async def get_property_conversation(property_id: str):
+    """Get email conversation for a specific property"""
+    try:
+        # Convert string ID to ObjectId for MongoDB query
+        try:
+            object_id = ObjectId(property_id)
+        except:
+            raise HTTPException(status_code=400, detail="Invalid property ID format")
+        
+        # Get property data
+        property_data = properties_collection.find_one({"_id": object_id})
+        if not property_data:
+            raise HTTPException(status_code=404, detail="Property not found")
+        
+        # Import the function here to avoid circular imports
+        from email_utils import get_email_conversation
+        
+        # Get conversation
+        conversation = get_email_conversation(property_data)
+        
+        return JSONResponse(content={
+            "property_id": property_id,
+            "address": property_data.get("address", ""),
+            "conversation": conversation,
+            "total_emails": len(conversation)
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error getting property conversation: {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
 
 @app.post("/workflow/existing-data/")
 async def existing_data_workflow():
