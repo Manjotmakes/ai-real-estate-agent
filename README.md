@@ -237,25 +237,151 @@ The `comparison_agent` delivers actionable insights:
 
 - Python 3.8+
 - Node.js 16+
-- MongoDB 4.4+
+- MongoDB 4.4+ (local or cloud instance)
 - Azure OpenAI API access
 - Gmail API credentials
+- GitHub personal access token
 
-### Quick Setup
+### 📋 Step-by-Step Setup
+
+#### 1. Clone the Repository
 
 ```bash
-# Clone the repository
 git clone https://github.com/Manjotmakes/real-estate-ai-system.git
+cd real-estate-ai-system
+```
 
-# Backend setup
+#### 2. Gmail API Setup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select existing one
+3. Enable Gmail API
+4. Create credentials (OAuth 2.0 Client ID)
+5. Download the credentials file and rename it to `credentials.json`
+6. Place `credentials.json` in the `backend/` directory
+
+#### 3. Environment Configuration
+
+Create a `.env` file in the `backend/` directory with these variables:
+
+```env
+# AI Service Configuration
+GLOBAL_LLM_SERVICE=azure_openai
+OPENAI_API_VERSION=2024-02-01
+
+# GitHub Integration
+GITHUB_TOKEN=your_github_personal_access_token
+
+# Database Configuration
+MONGO_URI=mongodb://localhost:27017
+DB_NAME=real_estate_ai
+COLLECTION_NAME=properties
+
+# Email Configuration (for testing)
+TEST_EMAIL=your-test-email@gmail.com
+```
+
+#### 4. MongoDB Setup
+
+**Option A: Local MongoDB**
+
+```bash
+# Install MongoDB locally
+# macOS
+brew install mongodb-community
+
+# Ubuntu/Debian
+sudo apt install mongodb
+
+# Start MongoDB service
+mongod --dbpath /path/to/your/db
+```
+
+**Option B: MongoDB Atlas (Cloud)**
+
+1. Create account at [MongoDB Atlas](https://www.mongodb.com/atlas)
+2. Create a cluster
+3. Get connection string and update `MONGO_URI` in `.env`
+
+**Create Database and Collections:**
+
+```javascript
+// Connect to MongoDB and run these commands
+use real_estate_ai
+
+// Create collections
+db.createCollection("properties")
+db.createCollection("email_replies")
+db.createCollection("comparisons")
+
+// Verify collections
+show collections
+```
+
+#### 5. Backend Setup
+
+```bash
 cd backend
-pip install -r requirements.txt
-python -m uvicorn main:app --reload
 
-# Frontend setup
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the FastAPI server
+python -m uvicorn main:app --reload
+```
+
+#### 6. Frontend Setup
+
+```bash
 cd frontend
+
+# Install dependencies
 npm install
+
+# Start the development server
 npm start
+```
+
+### 🔧 Configuration Details
+
+#### Required API Keys & Tokens:
+
+- **Azure OpenAI API Key**: Get from Azure Portal
+- **GitHub Personal Access Token**: Generate from GitHub Settings > Developer Settings
+- **Gmail API Credentials**: Download from Google Cloud Console
+
+#### Environment Variables Explanation:
+
+- `GLOBAL_LLM_SERVICE`: AI service provider (azure_openai)
+- `OPENAI_API_VERSION`: Azure OpenAI API version
+- `GITHUB_TOKEN`: For GitHub integrations
+- `MONGO_URI`: MongoDB connection string
+- `DB_NAME`: Database name (real_estate_ai)
+- `COLLECTION_NAME`: Main collection name (properties)
+- `TEST_EMAIL`: Your Gmail for testing email functionality
+
+### 🧪 Testing the Setup
+
+```bash
+# Test database connection
+python -c "from database.connection import test_connection; test_connection()"
+
+# Test Gmail API
+python -c "from utils.gmail_client import test_gmail_connection; test_gmail_connection()"
+
+# Run the application
+python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 📁 File Structure After Setup
+
+```
+📦 backend/
+├── 🔑 credentials.json        # Gmail API credentials
+├── 🌍 .env                    # Environment variables
+├── 📄 requirements.txt
+├── 🔧 main.py
+└── 📂 [other project files]
 ```
 
 ---
@@ -301,7 +427,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Built with ❤️ for the Real Estate Community**
 
-[![GitHub stars](https://img.shields.io/github/stars/Manjotmakes/real-estate-ai-system?style=social)](https://github.com/your-username/real-estate-ai-system)
-[![GitHub forks](https://img.shields.io/github/forks/Manjotmakes/real-estate-ai-system?style=social)](https://github.com/your-username/real-estate-ai-system)
+[![GitHub stars](https://img.shields.io/github/stars/Manjotmakes/real-estate-ai-system?style=social)](https://github.com/Manjotmakes/real-estate-ai-system)
+[![GitHub forks](https://img.shields.io/github/forks/Manjotmakes/real-estate-ai-system?style=social)](https://github.com/Manjotmakes/real-estate-ai-system)
 
 </div>
