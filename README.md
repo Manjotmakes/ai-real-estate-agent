@@ -77,15 +77,15 @@ graph TD
     G --> H[📊 Comparison Agent]
     H --> I[📈 Insights Dashboard]
 
-    style A fill:#e1f5fe
-    style B fill:#f3e5f5
-    style C fill:#e8f5e8
-    style D fill:#fff3e0
-    style E fill:#fce4ec
-    style F fill:#f1f8e9
-    style G fill:#e0f2f1
-    style H fill:#ede7f6
-    style I fill:#e3f2fd
+    style A fill:#e1f5fe,color:#000000
+    style B fill:#f3e5f5,color:#000000
+    style C fill:#e8f5e8,color:#000000
+    style D fill:#fff3e0,color:#000000
+    style E fill:#fce4ec,color:#000000
+    style F fill:#f1f8e9,color:#000000
+    style G fill:#e0f2f1,color:#000000
+    style H fill:#ede7f6,color:#000000
+    style I fill:#e3f2fd,color:#000000
 ```
 
 ---
