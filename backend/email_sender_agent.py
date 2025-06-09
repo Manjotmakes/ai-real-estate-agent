@@ -4,6 +4,8 @@ from models import properties_collection
 from email_utils import send_email
 import asyncio
 import json
+from datetime import datetime
+
 
 from autogen_agentchat.agents import AssistantAgent  # type: ignore
 from autogen_core.models import UserMessage  # type: ignore
@@ -32,32 +34,37 @@ email_agent = AssistantAgent(
     model_client=client,
     description="Creates personalized email inquiries for properties.",
     system_message="""
-    You are a professional real estate assistant. Your job is to write a polite and concise email to a property dealer,
-    asking for the current availability status, price of the property, and latest asking rent of a property.
+You are a professional real estate assistant. Your job is to write a polite and concise email to a property contact person,
+asking for the current availability status, price of the property, and latest asking rent of a property.
 
-    The tone should be professional but friendly.
-    End the email by expressing interest and requesting a reply with updates.
+The tone should be professional but friendly.
+Begin the email with the contact person's name.
+End the email by expressing interest and requesting a reply with updates.
+Sign every email with:
 
-    IMPORTANT:
-    Return ONLY a valid JSON object with two fields: "subject" and "body".
-    Example:
-    {
-      "subject": "Inquiry on Property Availability and Pricing",
-      "body": "Dear [Property Contact's Name],\\n\\nI hope this message finds you well..."
-    }
-    """
+Best regards,  
+Manjot Singh  
+mtmanjot@gmail.com
+
+IMPORTANT:
+Return ONLY a valid JSON object with two fields: "subject" and "body".
+Example:
+{
+  "subject": "Inquiry on Property Availability and Pricing",
+  "body": "Dear [Contact Name],\\n\\nI hope this message finds you well..."
+}
+"""
 )
 
-# Helper: format MongoDB property into input for the agent
-def format_property_for_agent(property_data: dict) -> str:
+def format_property_for_agent(property_data: dict, contact_person: str) -> str:
     return (
+        f"Contact Person: {contact_person}\n"
         f"Property Address: {property_data.get('address', 'Unknown')}\n"
         f"Submarket: {property_data.get('submarket', 'Unknown')}\n"
         f"True Owner: {property_data.get('true_owner', 'Unknown')}\n"
         f"Asking Rent: {property_data.get('asking_rent', 'Unknown')}\n"
         f"Available SF: {property_data.get('sf_available', 'Unknown')} sq ft\n"
     )
-
 
 async def run_email_agent_for_all_properties():
     properties = list(properties_collection.find())
@@ -66,77 +73,93 @@ async def run_email_agent_for_all_properties():
         print("No properties found in MongoDB.")
         return
 
+    total_emails_sent = 0
+
     for i, prop in enumerate(properties, start=1):
-        print(f"\n📩 [{i}/{len(properties)}] Processing property at: {prop.get('address')}")
+        contact_persons = prop.get("owner_contact_persons", ["Unknown Contact"])
 
-        prompt = (
-            "Please write an email to the property contact asking for updated price and availability "
-            "based on the following property details. Return ONLY a JSON object with 'subject' and 'body' fields:\n\n"
-            + format_property_for_agent(prop)
-        )
+        for contact_person in contact_persons:
+            print(f"\n📩 Property {i}: Emailing contact → {contact_person}")
 
-        # Run the agent
-        agent_response = await email_agent.run(task=prompt)
-
-        email_subject = None
-        email_body = None
-
-        # Handle response: check for .messages attribute or list or str
-        messages = None
-        if hasattr(agent_response, "messages"):
-            messages = agent_response.messages
-        elif isinstance(agent_response, list):
-            messages = agent_response
-        else:
-            messages = [agent_response]
-
-        content = None
-        # Look for last message from this agent
-        for message in reversed(messages):
-            if getattr(message, "source", None) == "email_sender_agent":
-                content = getattr(message, "content", None)
-                break
-
-        if content is None:
-            print("⚠️ No content found in agent messages, skipping property.")
-            continue
-
-        # Try to parse JSON response safely
-        try:
-            parsed = json.loads(content)
-            email_subject = parsed.get("subject")
-            email_body = parsed.get("body")
-        except Exception as e:
-            print(f"⚠️ Failed to parse JSON from agent response: {e}")
-            # fallback: treat whole response as body with generic subject
-            email_body = content
-            email_subject = f"Inquiry: Property at {prop.get('address', 'Unknown')}"
-
-        if not email_body:
-            print("⚠️ No email body found in parsed agent response, skipping property.")
-            continue
-
-        if not email_subject:
-            email_subject = f"Inquiry: Property at {prop.get('address', 'Unknown')}"
-
-        print("✍️ Email generated:")
-        print(f"Subject: {email_subject}")
-        print(f"Body:\n{email_body}\n")
-
-        # Send email
-        try:
-            send_email(
-                recipient=prop["contact_email"],
-                subject=email_subject,
-                body=email_body
+            prompt = (
+                "Generate a professional email addressed to the contact person below "
+                "asking about property availability, pricing, and rent.\n\n"
+                + format_property_for_agent(prop, contact_person)
             )
-        except Exception as e:
-            print(f"⚠️ Failed to send email for property {prop.get('address', '')}: {e}")
 
-    # Optionally close the client if supported (avoid resource leaks)
+            # Run the agent
+            agent_response = await email_agent.run(task=prompt)
+
+            email_subject = None
+            email_body = None
+
+            # Extract content
+            messages = agent_response.messages if hasattr(agent_response, "messages") else [agent_response]
+            content = None
+            for message in reversed(messages):
+                if getattr(message, "source", None) == "email_sender_agent":
+                    content = getattr(message, "content", None)
+                    break
+
+            if not content:
+                print(f"⚠️ No response for {contact_person}")
+                continue
+
+            try:
+                parsed = json.loads(content)
+                email_subject = parsed.get("subject")
+                email_body = parsed.get("body")
+            except Exception as e:
+                print(f"⚠️ JSON parsing failed: {e}")
+                email_subject = f"Inquiry: Property at {prop.get('address', 'Unknown')}"
+                email_body = content
+
+            if not email_body:
+                print(f"⚠️ No body for {contact_person}, skipping...")
+                continue
+
+            if not email_subject:
+                email_subject = f"Inquiry: Property at {prop.get('address', 'Unknown')}"
+
+            # Send the email
+            try:
+                email_result = send_email(
+                    recipient=prop.get("contact_email", "mtmanjot@gmail.com"),
+                    subject=email_subject,
+                    body=email_body
+                )
+
+                if email_result and email_result.get("gmail_message_id"):
+                    print(f"✅ Email sent to {contact_person}")
+                    total_emails_sent += 1
+
+                    # Store metadata into MongoDB with BOTH IDs
+                    email_data = {
+                        "contact_person": contact_person,
+                        "contact_email": prop.get("contact_email", ""),
+                        "subject": email_subject,
+                        "body": email_body,
+                        "gmail_message_id": email_result["gmail_message_id"],
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                    
+                    # Add Email Message-ID if available
+                    if email_result.get("email_message_id"):
+                        email_data["email_message_id"] = email_result["email_message_id"]
+                    
+                    properties_collection.update_one(
+                        {"_id": prop["_id"]},
+                        {"$push": {"sent_emails": email_data}}
+                    )
+                else:
+                    print(f"⚠️ Email sent but no message ID returned. Skipping DB update.")
+            except Exception as e:
+                print(f"❌ Failed to send email to {contact_person}: {e}")
+
+    print(f"\n📬 Total emails sent: {total_emails_sent}")
+
     if hasattr(client, "close") and callable(client.close):
         await client.close()
-
 
 if __name__ == "__main__":
     asyncio.run(run_email_agent_for_all_properties())
