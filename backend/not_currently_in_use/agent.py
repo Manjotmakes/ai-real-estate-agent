@@ -16,6 +16,6 @@ def notify_property_owner(property_data):
 if __name__ == "__main__":
     sample = {
         "address": "3901 Capitol St, Houston, TX",
-        "contact_email": "example@gmail.com"
+        "contact_email": "raviking2311@gmail.com"
     }
     notify_property_owner(sample)

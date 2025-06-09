@@ -359,7 +359,7 @@ const PropertyDetails: React.FC = () => {
                       <Mail className="h-5 w-5 text-gray-400 dark:text-gray-500 mr-2" />
                       <div>
                         <p className="font-medium">
-                          {property.contact_email || "example@gmail.com"}
+                          {property.contact_email || "raviking2311@gmail.com"}
                         </p>
                         {property.agent_phone && (
                           <p className="text-gray-600 dark:text-gray-400 text-sm">
@@ -584,7 +584,7 @@ const PropertyDetails: React.FC = () => {
                 </div>
                 <div className="flex items-center text-gray-700 dark:text-gray-300 text-sm">
                   <Mail className="h-4 w-4 text-gray-400 dark:text-gray-500 mr-2" />
-                  <span>{property.contact_email || "example@gmail.com"}</span>
+                  <span>{property.contact_email || "raviking2311@gmail.com"}</span>
                 </div>
                 {property.agent_phone && (
                   <div className="flex items-center text-gray-700 dark:text-gray-300 text-sm">
@@ -629,7 +629,7 @@ const PropertyDetails: React.FC = () => {
                 {Array.from(
                   new Set(
                     conversation.map((email) =>
-                      email.to.includes("example@gmail.com")
+                      email.to.includes("raviking2311@gmail.com")
                         ? email.from
                         : email.to
                     )
@@ -718,7 +718,7 @@ const PropertyDetails: React.FC = () => {
                     conversation.reduce(
                       (groups: Record<string, EmailData[]>, email) => {
                         const contactKey = email.to.includes(
-                          "example@gmail.com"
+                          "raviking2311@gmail.com"
                         )
                           ? email.from
                           : email.to;
@@ -751,13 +751,13 @@ const PropertyDetails: React.FC = () => {
                               <div className="flex items-center space-x-2">
                                 <div
                                   className={`w-3 h-3 rounded-full ${
-                                    email.from.includes("example@gmail.com")
+                                    email.from.includes("raviking2311@gmail.com")
                                       ? "bg-blue-500"
                                       : "bg-green-500"
                                   }`}
                                 />
                                 <span className="font-medium text-gray-900 dark:text-white text-sm">
-                                  {email.from.includes("example@gmail.com")
+                                  {email.from.includes("raviking2311@gmail.com")
                                     ? "You"
                                     : email.from}
                                 </span>

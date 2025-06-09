@@ -44,7 +44,7 @@ Sign every email with:
 
 Best regards,  
 Manjot Singh  
-example@gmail.com
+raviking2311@gmail.com
 
 IMPORTANT:
 Return ONLY a valid JSON object with two fields: "subject" and "body".
@@ -124,7 +124,7 @@ async def run_email_agent_for_all_properties():
             # Send the email
             try:
                 email_result = send_email(
-                    recipient=prop.get("contact_email", "example@gmail.com"),
+                    recipient=prop.get("contact_email", "raviking2311@gmail.com"),
                     subject=email_subject,
                     body=email_body
                 )

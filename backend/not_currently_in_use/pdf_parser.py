@@ -31,7 +31,7 @@ def extract_properties_from_pdf(pdf_path: str):
                     sf = ''.join(c for c in available_line if c.isdigit() or c == ',')
                     property_data["sf_available"] = int(sf.replace(',', '')) if sf else None
 
-                    property_data["contact_email"] = "example@gmail.com"
+                    property_data["contact_email"] = "raviking2311@gmail.com"
 
                     properties.append(property_data)
 

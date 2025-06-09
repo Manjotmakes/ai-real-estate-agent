@@ -47,7 +47,7 @@ For each property, extract these fields with attention to detail:
    - "SF Available" in tables
    - "RBA" total square footage
    - Extract the maximum number, convert to integer
-7. **contact_email**: Always set to "example@gmail.com"
+7. **contact_email**: Always set to "raviking2311@gmail.com"
 
 IMPORTANT EXTRACTION RULES:
 - For `owner_contact_persons`, extract **only names of people**, not companies. They are typically listed with phone numbers.
@@ -326,7 +326,7 @@ async def extract_properties_with_agent(text: str):
     - owner_contact_persons (list of actual person names listed with phone numbers)
     - asking_rent
     - sf_available (extract the **maximum** available square footage)
-    - contact_email (always "example@gmail.com")
+    - contact_email (always "raviking2311@gmail.com")
 
     Return an array of valid JSON objects. Do NOT return explanations or markdown formatting.
     """
@@ -526,7 +526,7 @@ def create_fallback_extraction(text: str):
             "true_owner": owner,
             "asking_rent": asking_rent,
             "sf_available": sf_available,
-            "contact_email": "example@gmail.com",
+            "contact_email": "raviking2311@gmail.com",
             "images": []  # Initialize empty images array
         }
         properties.append(prop)
