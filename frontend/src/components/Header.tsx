@@ -21,19 +21,21 @@ const Header = ({ darkMode, toggleDarkMode }: HeaderProps) => {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-6">
           {/* Logo */}
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-gradient-primary rounded-xl">
-              <Building2 className="h-6 w-6 text-white" />
+          <a href="/">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-gradient-primary rounded-xl">
+                <Building2 className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  RealEstate AI
+                </h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Property Intelligence
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                RealEstate AI
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Property Intelligence
-              </p>
-            </div>
-          </div>
+          </a>
 
           {/* Navigation */}
           <nav className="hidden md:flex items-center space-x-2">
