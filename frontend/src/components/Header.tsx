@@ -21,7 +21,7 @@ const Header = ({ darkMode, toggleDarkMode }: HeaderProps) => {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-6">
           {/* Logo */}
-          <div className="flex items-center space-x-3">
+          <Link to="/" className="flex items-center space-x-3 hover:opacity-80 transition-opacity">
             <div className="p-2 bg-gradient-primary rounded-xl">
               <Building2 className="h-6 w-6 text-white" />
             </div>
@@ -33,7 +33,7 @@ const Header = ({ darkMode, toggleDarkMode }: HeaderProps) => {
                 Property Intelligence
               </p>
             </div>
-          </div>
+          </Link>
 
           {/* Navigation */}
           <nav className="hidden md:flex items-center space-x-2">
